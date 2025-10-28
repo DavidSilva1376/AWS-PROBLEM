@@ -57,7 +57,7 @@ def load_simulation_from_json(json_path: str) -> Dict[str, Any]:
         bucket_obj = Bucket(name=b.get("name", "unnamed_bucket"), public=b.get("public", False))
         for f in b.get("files", []):
             file_obj = FileObject(
-                filename=f.get("filename", "unnamed_file"),
+                name=f.get("name", "unnamed_file"),
                 content=f.get("content", ""),
                 encrypted=f.get("encrypted", False)
             )
