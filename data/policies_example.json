@@ -1,0 +1,14 @@
+[
+  {
+    "name": "allow_all_admin",
+    "effect": "Allow",
+    "actions": ["*"],
+    "resources": ["*"]
+  },
+  {
+    "name": "read_only_storage",
+    "effect": "Allow",
+    "actions": ["storage:GetObject", "storage:ListBucket"],
+    "resources": ["arn:simulated:storage:bucket/*"]
+  }
+]
