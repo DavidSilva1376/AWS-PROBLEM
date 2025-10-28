@@ -1,0 +1,52 @@
+{
+  "users": [
+    {
+      "username": "alice_admin",
+      "role": "AdminRole",
+      "policies": [
+        {
+          "name": "allow_all_admin",
+          "effect": "Allow",
+          "actions": ["*"],
+          "resources": ["*"]
+        }
+      ]
+    },
+    {
+      "username": "bob_dev",
+      "role": "DevRole",
+      "policies": [
+        {
+          "name": "read_only_storage",
+          "effect": "Allow",
+          "actions": ["storage:GetObject", "storage:ListBucket"],
+          "resources": ["arn:simulated:storage:bucket/*"]
+        }
+      ]
+    }
+  ],
+  "buckets": [
+    {
+      "name": "startup-datos-privado",
+      "public": false,
+      "files": [
+        {
+          "filename": "clientes.csv",
+          "content": "nombre,correo\nLuis,luis@example.com",
+          "encrypted": false
+        }
+      ]
+    },
+    {
+      "name": "startup-datos-publico",
+      "public": true,
+      "files": [
+        {
+          "filename": "proyecto.txt",
+          "content": "Documentación técnica del proyecto",
+          "encrypted": false
+        }
+      ]
+    }
+  ]
+}

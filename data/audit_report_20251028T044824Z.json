@@ -1,0 +1,55 @@
+{
+  "generated_at": "2025-10-28T04:48:24.832735Z",
+  "findings": [
+    {
+      "type": "Public Bucket",
+      "resource": "startup-datos-publico",
+      "risk": "Alta",
+      "description": "El bucket es público y puede exponer datos sensibles."
+    },
+    {
+      "type": "Permisos excesivos",
+      "resource": "alice_admin",
+      "risk": "Alta",
+      "description": "El usuario tiene permisos de administrador global."
+    }
+  ],
+  "pentest_results": [
+    {
+      "Usuario": "alice_admin",
+      "Bucket": "startup-datos-privado",
+      "Resultado": "ACCESO DENEGADO",
+      "Detalle": "Bucket privado, se requiere permiso explícito."
+    },
+    {
+      "Usuario": "alice_admin",
+      "Bucket": "startup-datos-publico",
+      "Resultado": "ACCESO PERMITIDO",
+      "Detalle": "Bucket es público, acceso abierto."
+    },
+    {
+      "Usuario": "bob_dev",
+      "Bucket": "startup-datos-privado",
+      "Resultado": "ACCESO DENEGADO",
+      "Detalle": "Bucket privado, se requiere permiso explícito."
+    },
+    {
+      "Usuario": "bob_dev",
+      "Bucket": "startup-datos-publico",
+      "Resultado": "ACCESO PERMITIDO",
+      "Detalle": "Bucket es público, acceso abierto."
+    },
+    {
+      "Usuario": "alice_admin",
+      "Acción": "Eliminar recurso crítico",
+      "Resultado": "PERMITIDO",
+      "Detalle": "Usuario tiene permisos administrativos."
+    },
+    {
+      "Usuario": "bob_dev",
+      "Acción": "Eliminar recurso crítico",
+      "Resultado": "DENEGADO",
+      "Detalle": "Usuario no tiene permisos administrativos."
+    }
+  ]
+}
