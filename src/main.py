@@ -6,6 +6,7 @@ Autor: Luis (proyecto educativo)
 Ejemplo de uso:
   python src/main.py
   python src/main.py --config data/config_example.json
+  python src/main.py --menu
 """
 
 import argparse
@@ -28,7 +29,7 @@ def run_full_simulation(config_file: str = None):
     """
     Ejecuta simulación completa.
     Si se pasa config_file, carga usuarios y buckets desde JSON.
-    Retorna dict con objetos y resultados.
+    Retorna (users, buckets).
     """
     if config_file:
         print(f"\nCargando configuración desde: {config_file}\n")
@@ -75,54 +76,44 @@ def run_full_simulation(config_file: str = None):
                 f.content = token.decode() if isinstance(token, (bytes, bytearray)) else str(token)
                 f.encrypted = True
 
-    # -------------------------
-    # Auditoría
-    # -------------------------
+    return users, buckets
+
+
+# ------------------------------------------------------------
+# Funciones individuales
+# ------------------------------------------------------------
+def run_audit(users, buckets):
     audit = SecurityAudit()
     audit.check_public_buckets(buckets)
     audit.check_admin_roles(users)
-    findings = audit.findings
+    return audit.findings
 
-    # -------------------------
-    # Pentest
-    # -------------------------
+
+def run_pentest(users, buckets):
     pentest = CloudPentest(users, buckets)
-    pentest_results = pentest.run_all_tests()
-
-    return {
-        "users": users,
-        "buckets": buckets,
-        "findings": findings,
-        "pentest_results": pentest_results,
-    }
+    return pentest.run_all_tests()
 
 
 # ------------------------------------------------------------
-# Función para mostrar resultados
+# Funciones para mostrar resultados
 # ------------------------------------------------------------
-def print_simulation_results(results: dict):
-    users = results["users"]
-    buckets = results["buckets"]
-    findings = results["findings"]
-    pentest_results = results["pentest_results"]
-
-    print("\n=== Simulación de Auditoría de Seguridad Cloud ===\n")
-
-    # IAM
+def print_iam(users):
     table_iam = [(u.username, u.role.name, ", ".join(u.role.get_effective_permissions())) for u in users]
-    print("Usuarios y roles IAM simulados:\n")
+    print("\nUsuarios y roles IAM simulados:\n")
     print(tabulate(table_iam, headers=["Usuario", "Rol", "Permisos"], tablefmt="fancy_grid"))
-    print("\n")
+    print()
 
-    # STORAGE
+
+def print_storage(buckets):
     table_storage = [(b.name, "PUBLIC" if b.public else "PRIVATE", f.name)
                      for b in buckets for f in b.files]
     print("Archivos cargados al almacenamiento simulado:\n")
     print(tabulate(table_storage, headers=["Bucket", "Acceso", "Archivo"], tablefmt="fancy_grid"))
-    print("\n")
+    print()
 
-    # AUDITORÍA
-    print("=== REPORTE DE AUDITORÍA DE SEGURIDAD (simulado) ===\n")
+
+def print_audit(findings):
+    print("\n=== REPORTE DE AUDITORÍA DE SEGURIDAD (simulado) ===\n")
     if not findings:
         print("✅ No se detectaron vulnerabilidades.\n")
     else:
@@ -134,7 +125,8 @@ def print_simulation_results(results: dict):
             print(f"- [{riesgo}] {tipo} -> {recurso}: {desc}")
         print()
 
-    # PENTEST
+
+def print_pentest(pentest_results):
     print("=== PRUEBAS DE PENETRACIÓN (simuladas) ===\n")
     pentable = [(r.get("Usuario", "-"),
                  r.get("Bucket", r.get("Acción", "-")),
@@ -145,30 +137,178 @@ def print_simulation_results(results: dict):
 
 
 # ------------------------------------------------------------
-# CLI (Interfaz por línea de comandos)
+# NUEVA FUNCIÓN: Reforzar seguridad (opción 6)
+# ------------------------------------------------------------
+def fix_security_issues(users, buckets):
+    """
+    Simula remediaciones:
+      - Hace privados los buckets públicos (b.public = False)
+      - Quita '*' de actions en las policies; si quedan vacías, añade 'restricted'
+    Devuelve un dict con resumen de cambios.
+    """
+    fixed = {"buckets_fixed": [], "policies_fixed": []}
+
+    # Arreglar buckets públicos
+    for b in buckets:
+        if getattr(b, "public", False):
+            b.public = False
+            fixed["buckets_fixed"].append(b.name)
+
+    # Arreglar policies con '*'
+    # Recorremos roles a través de usuarios (evita duplicados si varios usuarios comparten el mismo role)
+    seen_roles = set()
+    for u in users:
+        role = getattr(u, "role", None)
+        if not role:
+            continue
+        if role.name in seen_roles:
+            continue
+        seen_roles.add(role.name)
+        for p in getattr(role, "policies", []):
+            actions = getattr(p, "actions", [])
+            if "*" in actions:
+                # remover '*'
+                new_actions = [a for a in actions if a != "*"]
+                if not new_actions:
+                    # si queda vacío, dejamos un marcador "restricted"
+                    new_actions = ["restricted"]
+                p.actions = new_actions
+                fixed["policies_fixed"].append({"role": role.name, "policy": p.name, "new_actions": new_actions})
+
+    # Mostrar resumen de remediaciones aplicadas
+    print("\n🛠️  Remediaciones aplicadas (simuladas):\n")
+    if fixed["buckets_fixed"]:
+        print("Buckets cambiados a privado:")
+        for bname in fixed["buckets_fixed"]:
+            print(f" - {bname}")
+    else:
+        print(" - No se encontraron buckets públicos para corregir.")
+
+    if fixed["policies_fixed"]:
+        print("\nPolicies modificadas (se removió '*'):")
+        for item in fixed["policies_fixed"]:
+            print(f" - Role: {item['role']}, Policy: {item['policy']}, Nuevas acciones: {item['new_actions']}")
+    else:
+        print(" - No se encontraron policies con '*' para modificar.")
+
+    # Mostrar estado posterior
+    print("\n🔎 Estado posterior a las remediaciones:\n")
+    print_storage(buckets)
+    print_iam(users)
+
+    return fixed
+
+
+# ------------------------------------------------------------
+# Menú interactivo
+# ------------------------------------------------------------
+def interactive_menu(users, buckets):
+    while True:
+        print("\n=== Menú de Simulación Cloud ===")
+        print("[1] Ejecutar simulación completa")
+        print("[2] Ejecutar solo auditoría")
+        print("[3] Ejecutar solo pentest")
+        print("[4] Mostrar usuarios y roles IAM")
+        print("[5] Mostrar buckets y archivos")
+        print("[6] Reforzar seguridad simulada")  # <-- nueva opción
+        print("[0] Salir")
+
+        option = input("\nSelecciona una opción: ").strip()
+
+        if option == "1":
+            print("\n🔍 Ejecutando simulación completa...\n")
+            findings = run_audit(users, buckets)
+            pentest_results = run_pentest(users, buckets)
+            print_iam(users)
+            print_storage(buckets)
+            print_audit(findings)
+            print_pentest(pentest_results)
+
+        elif option == "2":
+            print("\n🧾 Ejecutando solo auditoría...\n")
+            findings = run_audit(users, buckets)
+            print_audit(findings)
+
+        elif option == "3":
+            print("\n💥 Ejecutando solo pentest...\n")
+            pentest_results = run_pentest(users, buckets)
+            print_pentest(pentest_results)
+
+        elif option == "4":
+            print_iam(users)
+
+        elif option == "5":
+            print_storage(buckets)
+
+        elif option == "6":
+            print("\n🔧 Reforzando seguridad (simulado)...\n")
+            fix_security_issues(users, buckets)
+
+        elif option == "0":
+            print("\n👋 Saliendo del simulador. ¡Hasta luego!\n")
+            break
+        else:
+            print("❌ Opción no válida, intenta de nuevo.")
+
+
+# ------------------------------------------------------------
+# CLI (Interfaz por línea de comandos mejorada)
 # ------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
         description="Simulación educativa de auditoría y pentest en entorno cloud (AWS simulado)."
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Ruta del archivo JSON con configuración personalizada (opcional)."
-    )
+    parser.add_argument("--config", type=str, help="Ruta del archivo JSON con configuración personalizada (opcional).")
+    parser.add_argument("--menu", action="store_true", help="Inicia el modo interactivo de menú (opcional).")
+    parser.add_argument("action", nargs="?", choices=["audit", "pentest", "full"], help="Acción rápida a ejecutar (opcional).")
 
     args = parser.parse_args()
     config_file = args.config
 
+    # Validación del archivo
     if config_file:
         path = Path(config_file)
         if not path.is_file():
             print(f"❌ No se encontró el archivo de configuración: {config_file}")
             return
 
-    results = run_full_simulation(config_file)
-    print_simulation_results(results)
+    # Cargar simulación
+    users, buckets = run_full_simulation(config_file)
+
+    # Modo menú
+    if args.menu:
+        interactive_menu(users, buckets)
+        return
+
+    # Acciones CLI directas
+    if args.action == "audit":
+        findings = run_audit(users, buckets)
+        print_audit(findings)
+        return
+
+    elif args.action == "pentest":
+        pentest_results = run_pentest(users, buckets)
+        print_pentest(pentest_results)
+        return
+
+    elif args.action == "full":
+        findings = run_audit(users, buckets)
+        pentest_results = run_pentest(users, buckets)
+        print_iam(users)
+        print_storage(buckets)
+        print_audit(findings)
+        print_pentest(pentest_results)
+        return
+
+    # Si no hay flags ni acción => modo clásico
+    findings = run_audit(users, buckets)
+    pentest_results = run_pentest(users, buckets)
+    print_iam(users)
+    print_storage(buckets)
+    print_audit(findings)
+    print_pentest(pentest_results)
 
 
 if __name__ == "__main__":
     main()
+
